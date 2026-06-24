@@ -13,6 +13,11 @@
     We do NOT ship a SHA256SUMS file: GitHub computes and shows a SHA-256 digest per release
     asset itself (REST 'digest' field + the release UI), which covers download integrity.
 
+    gh must be authenticated with a token carrying (fine-grained) Contents: write,
+    Pull requests: write and Administration: read/write on the repo (or classic 'repo' scope).
+    A missing 'Pull requests' permission fails Prepare with
+    "Resource not accessible by personal access token (createPullRequest)".
+
     Stages:
       Preview  (default)         List exactly what WOULD happen — version bump (old -> new),
                                  the files that change, the pending working-tree changes that
@@ -21,7 +26,9 @@
       Prepare  (-Stage Prepare)  Bump the version in all relevant files, build, create branch
                                  release/vX.Y.Z, commit, push, and open a PR. Does NOT create
                                  the GitHub release (the tag must point at main, which only
-                                 happens once the PR is merged).
+                                 happens once the PR is merged). RESUMABLE: if already on the
+                                 release branch it skips bump/build/commit/push and only ensures
+                                 the PR exists (so you can recover from a failed PR step).
       Publish  (-Stage Publish)  Run AFTER the PR is merged to main: verify main carries the
                                  target version, rebuild from main, and create the GitHub
                                  release vX.Y.Z (tag on main) with the .plgx/.dll assets and the
@@ -205,37 +212,59 @@ switch ($Stage) {
 
     'Prepare' {
         $gh = Resolve-Gh
-        if (git rev-parse --abbrev-ref HEAD) { } else { throw "Not a git repository." }
-        Confirm-Or-Exit "Bump to $Version, build, create branch '$branch', commit, push and open a PR?"
+        git rev-parse --is-inside-work-tree > $null 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "Not a git repository." }
 
-        Write-Host "==> Bumping version files" -ForegroundColor Cyan
-        Update-VersionFiles $plugin $current $Version
-        Invoke-Build
-        Get-Assets $plugin | Out-Null   # verify the artifacts exist after the build
+        if ((git rev-parse --abbrev-ref HEAD) -eq $branch) {
+            Write-Host "Already on '$branch' - skipping bump/build/commit/push; only ensuring the PR exists." -ForegroundColor Yellow
+        }
+        else {
+            Confirm-Or-Exit "Bump to $Version, build, create branch '$branch', commit, push and open a PR?"
+            Write-Host "==> Bumping version files" -ForegroundColor Cyan
+            Update-VersionFiles $plugin $current $Version
+            Invoke-Build
+            Get-Assets $plugin | Out-Null   # verify the artifacts exist after the build
 
-        Write-Host "==> Creating branch, commit, push" -ForegroundColor Cyan
-        git checkout -b $branch
-        git add -A
-        git commit -m ("Release {0}" -f $Version)
-        git push -u origin $branch
+            Write-Host "==> Creating branch, commit, push" -ForegroundColor Cyan
+            git checkout -b $branch
+            if ($LASTEXITCODE -ne 0) { throw "git checkout -b $branch failed (does the branch already exist? delete it or check it out)." }
+            git add -A
+            git commit -m ("Release {0}" -f $Version)
+            if ($LASTEXITCODE -ne 0) { throw "git commit failed." }
+            git push -u origin $branch
+            if ($LASTEXITCODE -ne 0) { throw "git push failed." }
+        }
 
-        Write-Host "==> Opening PR" -ForegroundColor Cyan
-        $notesFile = [System.IO.Path]::GetTempFileName()
-        Set-Content $notesFile $notes -Encoding utf8
-        & $gh pr create --base main --head $branch --title ("Release {0}" -f $Version) --body-file $notesFile
-        Remove-Item $notesFile -ErrorAction SilentlyContinue
+        Write-Host "==> Ensuring a PR exists" -ForegroundColor Cyan
+        # gh prints "[]" when no PR matches; any PR object contains a '{'. String-check avoids a
+        # PowerShell 5.1 ConvertFrom-Json quirk (an empty JSON array becomes one pipeline object).
+        $listJson = (& $gh pr list --head $branch --base main --state open --json url) -join "`n"
+        if ($LASTEXITCODE -ne 0) { throw "gh pr list failed (exit $LASTEXITCODE)." }
+        if ($listJson -match '\{') {
+            Write-Host ("A PR for '{0}' is already open." -f $branch) -ForegroundColor Green
+        }
+        else {
+            & $gh pr create --base main --head $branch --title ("Release {0}" -f $Version) --body $notes
+            if ($LASTEXITCODE -ne 0) {
+                throw ("gh pr create failed (exit $LASTEXITCODE). " +
+                    "'Resource not accessible by personal access token (createPullRequest)' means the token " +
+                    "lacks the 'Pull requests: Read and write' permission - add it to the fine-grained token, " +
+                    "then re-run this same command (Prepare resumes and only opens the PR).")
+            }
+        }
 
         Write-Host ""
-        Write-Host ("PR opened for {0}. Merge it to main, then run:" -f $tag) -ForegroundColor Green
+        Write-Host ("Branch + PR ready for {0}. Merge the PR to main, then run:" -f $tag) -ForegroundColor Green
         Write-Host ("  .\release.ps1 -Version {0} -Type {1} -Stage Publish" -f $Version, $Type) -ForegroundColor Green
-        Write-Host ("Artifacts built in build\ ({0}.plgx/.dll) for verification; rebuilt from main at Publish." -f $plugin) -ForegroundColor DarkGray
     }
 
     'Publish' {
         $gh = Resolve-Gh
         Write-Host "==> Switching to main and pulling" -ForegroundColor Cyan
         git checkout main
+        if ($LASTEXITCODE -ne 0) { throw "git checkout main failed." }
         git pull --ff-only
+        if ($LASTEXITCODE -ne 0) { throw "git pull --ff-only failed." }
         $onMain = (Get-PluginInfo).Version
         if ($onMain -ne $Version) {
             throw "main is at version $onMain, expected $Version. Is the release PR merged? (Run -Stage Prepare first, then merge.)"
@@ -244,15 +273,11 @@ switch ($Stage) {
 
         Invoke-Build
         $assets = Get-Assets $plugin
-
-        $notesFile = [System.IO.Path]::GetTempFileName()
-        Set-Content $notesFile $notes -Encoding utf8
         $typeArgs = Get-TypeArgs $Type
 
         Write-Host ("==> Creating GitHub release {0} ({1})" -f $tag, $Type) -ForegroundColor Cyan
-        & $gh release create $tag @assets `
-            --target main --title ("{0} {1}" -f $plugin, $Version) --notes-file $notesFile @typeArgs
-        Remove-Item $notesFile -ErrorAction SilentlyContinue
+        & $gh release create $tag @assets --target main --title ("{0} {1}" -f $plugin, $Version) --notes $notes @typeArgs
+        if ($LASTEXITCODE -ne 0) { throw "gh release create failed (exit $LASTEXITCODE)." }
 
         Write-Host ""
         Write-Host ("Done. Release {0} created as '{1}'." -f $tag, $Type) -ForegroundColor Green
