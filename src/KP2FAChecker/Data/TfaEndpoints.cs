@@ -4,6 +4,10 @@ namespace KP2FAChecker.Data
     {
         private const string BaseUrl = "https://api.2fa.directory/v4/";
 
+        // A method-scoped endpoint (e.g. totp.json) filters which *entries* are returned — only
+        // sites supporting that method — but each returned entry still carries its FULL method set.
+        // So selecting "TOTP only" can render a cell like "SMS, TOTP": the site qualified for the
+        // totp.json scope, and we faithfully show every method it documents, not just TOTP.
         public static string ForScope(TfaDataScope scope)
         {
             switch (scope)

@@ -107,6 +107,10 @@ has a **Refresh Now** button.
   `email.json` from `https://api.2fa.directory/v4/` depending on the configured scope, using
   conditional `If-None-Match` requests so unchanged data isn't re-downloaded. In `all.json`,
   disabled sites (empty `{}` objects) and entries with no documented methods are skipped.
+  The API also serves `custom-hardware.json` and `custom-software.json`, but these are
+  intentionally **not** offered as scopes: the Software / Hardware methods (and their product
+  names) already show up in every other scope via each entry's full method set, so a dedicated
+  scope would add UI noise without surfacing anything new.
 - **Domain matching.** Hosts are reduced to candidate domains via the
   [Public Suffix List](https://publicsuffix.org/) and checked most-specific first.
 - **Caching.** Content and metadata are cached under

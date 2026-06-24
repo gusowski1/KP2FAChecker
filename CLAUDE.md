@@ -31,6 +31,29 @@ Both come from the same `src\` sources, so they are functionally identical — s
 
 Target framework: `.NET 4.8` (`net48`). UI is WinForms (not WPF). **Keep all source C# 5-compatible** — the `.plgx` is recompiled as C# 5 on the user's machine, so modern C# / NRT syntax would break it.
 
+## Release
+
+Releases are scripted by **`release.ps1`** (repo root): a three-stage **branch + PR** flow.
+**`CHANGELOG.md`** (repo root, [Keep a Changelog](https://keepachangelog.com/) format) is the
+single source of the GitHub release notes; the release type is explicit.
+
+```
+release.ps1 -Version <x.y.z> -Type <draft|prerelease|release> [-Stage Preview|Prepare|Publish] [-Force]
+```
+
+- **Preview** (default) — lists the version bump, the files that change, the working-tree changes
+  that would be committed, the CHANGELOG notes and the plan. Changes nothing (the approval gate).
+- **Prepare** — bumps the three version locations (`VersionInfo.txt`, `Properties\AssemblyInfo.cs`,
+  `PluginVersion.cs`), builds, creates branch `release/vX.Y.Z`, commits, pushes and opens a PR.
+  No GitHub release yet.
+- **Publish** — run **after** the PR is merged to `main`: builds from `main` and creates the GitHub
+  release `vX.Y.Z` (tag on `main`) with the `.plgx`/`.dll` assets and the CHANGELOG section as notes.
+
+`-Type` maps to `--draft` / `--prerelease` / (none = a normal "Latest" release). GitHub shows a
+SHA-256 digest per asset itself, so no `SHA256SUMS` file is shipped. Add the new `## [x.y.z]` section
+to `CHANGELOG.md` before releasing. The umbrella **`..\release-all.ps1`** releases both plugins in
+lockstep at one version; run a single repo's `release.ps1` to release one plugin.
+
 ## Architecture
 
 ### Solution layout
@@ -66,7 +89,7 @@ The `src\Shared` tree is **reused verbatim** from KPPasskeyChecker (the canonica
 
 This plugin consumes **API version 4** — a per-domain object map (the cleanest analog to the passkeys v1 map KPPasskeyChecker consumes). Base URL `https://api.2fa.directory/`, each endpoint has a sibling `.json.sig`.
 
-- Endpoints: `v4/all.json`, `v4/sms.json`, `v4/email.json`, `v4/totp.json`, `v4/u2f.json`, `v4/custom-hardware.json`, `v4/custom-software.json`. In `all.json`, **disabled sites appear as empty objects** (`{"domain.com": {}}`).
+- Endpoints: `v4/all.json`, `v4/sms.json`, `v4/email.json`, `v4/totp.json`, `v4/u2f.json`, `v4/custom-hardware.json`, `v4/custom-software.json`. In `all.json`, **disabled sites appear as empty objects** (`{"domain.com": {}}`). The `custom-hardware.json` / `custom-software.json` endpoints exist but are **intentionally not offered as scopes** — the Software/Hardware methods (and their product names) already appear in every other scope via each entry's full method set, so a dedicated scope would add no new information. The selectable scopes are `all`/`totp`/`u2f`/`sms`/`email`.
 - Per-domain entry schema (key = domain): `methods` (array of `sms`/`call`/`email`/`totp`/`u2f`/`custom-software`/`custom-hardware`), `custom-software`/`custom-hardware` (product-name arrays, only when those tokens are present), `documentation`/`recovery` (URLs), `notes` (free text). v4 does **not** include service names, icons, `contact`, `regions`, or `additional-domains` (those are v3-only) — so there is no alias expansion; each alias is its own top-level key.
 - An entry whose `methods` is absent/empty (or `{}`) means "no documented 2FA" → it is **skipped** at index time and renders a blank cell. Unknown method tokens are dropped (forward-compatible), never thrown.
 - **Method → column label:** `totp`→TOTP, `u2f`→Security Key, `sms`→SMS, `email`→Email, `call`→Phone Call, `custom-software`→Software (+ product names), `custom-hardware`→Hardware (+ product names). The cell is a comma-joined summary, e.g. `TOTP, Security Key, SMS`.
@@ -109,6 +132,7 @@ KeePass's built-in plugin update check is wired up by overriding `Plugin.UpdateU
 ## Conventions
 
 - All code, identifiers, and comments must be in **English**.
+- **User-facing strings are single-language** (English until localization; when localized, uniformly one language). The one exception is **OS-/framework-provided error messages** (e.g. a .NET `Exception.Message`): these are shown **verbatim and never translated**, so they appear in the user's OS language by design (the user is assumed to read their own OS language). A localized framework message shown next to our English text is therefore **intentional, not a defect** — do not "fix" it.
 - This plugin is intentionally separate from KPPasskeyChecker — do **not** merge passkey and 2FA logic into one plugin.
 - The plugin **code** is licensed under **GPLv3** (`LICENSE`); any new dependency must be GPL-compatible (this is partly why the plugin sticks to the .NET BCL). The 2FA Directory **data** is MIT-licensed (attribution required).
 - The entry-list column is titled **"2FA Methods"** — never "2FA Support" (that is the separate third-party KP2faChecker's column).

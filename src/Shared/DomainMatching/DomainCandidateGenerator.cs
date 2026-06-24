@@ -50,7 +50,13 @@ namespace KPPasskeyChecker.Shared.DomainMatching
                 string content = await http.GetStringAsync(PslUrl).ConfigureAwait(false);
                 string tmp = cacheFile + ".tmp";
                 File.WriteAllText(tmp, content, System.Text.Encoding.UTF8);
-                File.Move(tmp, cacheFile);
+                // Guarded swap: on .NET 4.8 File.Move throws IOException when the destination
+                // already exists, which would make every refresh after the 7-day TTL fail. Mirror
+                // the atomic pattern in FileSystemJsonCache.AtomicWrite.
+                if (File.Exists(cacheFile))
+                    File.Replace(tmp, cacheFile, null);  // atomic swap on the same volume
+                else
+                    File.Move(tmp, cacheFile);
                 return content;
             }
         }
