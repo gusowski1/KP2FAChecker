@@ -113,13 +113,58 @@ namespace KP2FAChecker.Settings
             }
             catch (Exception ex)
             {
-                _lblCacheStatus.Text   = "Refresh failed: " + ex.Message;
+                // The service is fail-soft and normally reports problems via LastError instead of
+                // throwing; an exception here is the unexpected case.
+                ShowRefreshError("Refresh failed: " + ex.Message);
                 _btnRefreshNow.Enabled = true;
                 return;
             }
 
-            UpdateCacheStatus();
+            // RefreshAsync is fail-soft: a network/parse/PGP problem does not throw — it leaves the
+            // last known-good (cached) data in place and records the cause in LastError. Surface
+            // that here so the user can tell a failed refresh apart from a successful one.
+            TfaDirectoryService svc = TfaDirectoryService.Current;
+            if (!string.IsNullOrEmpty(svc.LastError))
+                ShowRefreshError(DescribeRefreshFailure(svc));
+            else
+                UpdateCacheStatus();
+
             _btnRefreshNow.Enabled = true;
+        }
+
+        private void ShowRefreshError(string message)
+        {
+            _lblCacheStatus.Text = message;
+            MessageBox.Show(this, message, "Refresh failed",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+
+        // Turns the raw LastError into a user-facing message that names the likely cause (network,
+        // data format, or signature verification) and states whether cached data is still in use.
+        // Fail-soft and fail-closed behaviour is unchanged — this only describes the outcome.
+        private static string DescribeRefreshFailure(TfaDirectoryService svc)
+        {
+            string cause = ClassifyError(svc.LastError);
+            string body  = "Could not refresh the 2FA directory (" + cause + ")."
+                         + "\r\n\r\nDetails: " + svc.LastError;
+
+            return svc.Directory != null
+                ? body + "\r\n\r\nStill showing the last cached data."
+                : body + "\r\n\r\nNo cached data is available yet.";
+        }
+
+        private static string ClassifyError(string error)
+        {
+            if (string.IsNullOrEmpty(error)) return "unknown error";
+
+            if (error.IndexOf("PGP verification", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                error.IndexOf("Signature verifier", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "signature verification failed";
+
+            if (error.IndexOf("parse", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "unexpected data format";
+
+            return "network error";
         }
 
         private void OnOkClick(object sender, EventArgs e)

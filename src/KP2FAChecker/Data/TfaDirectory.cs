@@ -17,6 +17,9 @@ namespace KP2FAChecker.Data
 
         public TfaEntry FindByDomain(string domain)
         {
+            if (string.IsNullOrEmpty(domain))
+                return null;
+
             TfaEntry entry;
             return _index.TryGetValue(domain.ToLowerInvariant(), out entry) ? entry : null;
         }

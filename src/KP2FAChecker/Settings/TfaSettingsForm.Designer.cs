@@ -66,7 +66,7 @@ namespace KP2FAChecker.Settings
             this._grpRefresh.Size     = new System.Drawing.Size(410, 80);
             this._grpRefresh.TabIndex = 1;
             this._grpRefresh.TabStop  = false;
-            this._grpRefresh.Text     = "Refresh";
+            this._grpRefresh.Text     = "Updates && Verification";
 
             // _lblInterval
             this._lblInterval.AutoSize = true;

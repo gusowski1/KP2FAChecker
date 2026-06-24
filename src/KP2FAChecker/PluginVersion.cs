@@ -2,7 +2,7 @@ namespace KP2FAChecker
 {
     internal static class PluginVersion
     {
-        public const string Current = "0.1.0";
+        public const string Current = "0.2.0";
         public const string RepoUrl = "https://github.com/gusowski1/KP2FAChecker";
 
         // KeePass downloads this file and compares "KP2FAChecker:<version>" (the AssemblyTitle
