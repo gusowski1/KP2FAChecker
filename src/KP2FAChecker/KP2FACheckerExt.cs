@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Windows.Forms;
 using KeePass.Plugins;
+using KeePassLib;
 using KP2FAChecker.Data;
 using KP2FAChecker.Settings;
 using KP2FAChecker.UI;
@@ -15,6 +16,7 @@ namespace KP2FAChecker
         private TfaColumnProvider _columnProvider;
         private ToolStripMenuItem _menuItem;
         private ToolStripSeparator _menuSeparator;
+        private ToolStripMenuItem _entryMenuItem;
 
         /// <summary>
         /// Lets KeePass check whether a newer plugin version is available. KeePass downloads
@@ -53,6 +55,12 @@ namespace KP2FAChecker
             _menuItem.Click += OnSettingsMenuClick;
             toolsItems.Add(_menuItem);
 
+            // Per-entry action: a right-click on an entry opens the same detail dialog the
+            // "2FA Methods" column shows on double-click. No icon yet (delivered separately).
+            _entryMenuItem = new ToolStripMenuItem("Check 2FA Support");
+            _entryMenuItem.Click += OnEntryMenuClick;
+            host.MainWindow.EntryContextMenu.Items.Add(_entryMenuItem);
+
             return true;
         }
 
@@ -64,6 +72,14 @@ namespace KP2FAChecker
             {
                 _host.ColumnProviderPool.Remove(_columnProvider);
                 _columnProvider = null;
+            }
+
+            if (_entryMenuItem != null)
+            {
+                _host.MainWindow.EntryContextMenu.Items.Remove(_entryMenuItem);
+                _entryMenuItem.Click -= OnEntryMenuClick;
+                _entryMenuItem.Dispose();
+                _entryMenuItem = null;
             }
 
             if (_menuItem != null)
@@ -109,6 +125,24 @@ namespace KP2FAChecker
 
             if (_host != null)
                 _host.MainWindow.RefreshEntriesList();
+        }
+
+        private void OnEntryMenuClick(object sender, EventArgs e)
+        {
+            if (_host == null || _columnProvider == null) return;
+
+            PwEntry[] selected = _host.MainWindow.GetSelectedEntries();
+            if (selected == null || selected.Length == 0)
+            {
+                MessageBox.Show(_host.MainWindow as IWin32Window,
+                    "Please select an entry first.", "2FA Checker",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            // The detail dialog is per-entry; act on the first selected entry. The column's
+            // double-click flow is reused verbatim, including its own no-URL / no-data handling.
+            _columnProvider.ShowDetailDialog(selected[0]);
         }
     }
 }
