@@ -85,6 +85,9 @@ namespace KPPasskeyChecker.Shared.Pgp
 
         private PgpVerificationResult VerifySignature(byte[] content, byte[] sig, string onePassKeyId)
         {
+            if (sig.Length < 6)
+                return PgpVerificationResult.Invalid("Signature packet too short.");
+
             byte version = sig[0];
             if (version != 4)
                 return PgpVerificationResult.Invalid("Unsupported signature version " + version + " (expected 4).");
@@ -158,12 +161,20 @@ namespace KPPasskeyChecker.Shared.Pgp
         private static byte[] ReadSignatureMpi(byte[] sig, int hashedRegionLen)
         {
             int q = hashedRegionLen;
+            if (q + 1 >= sig.Length)
+                throw new ArgumentException("Truncated signature MPI.");
             int unhashedLen = (sig[q] << 8) | sig[q + 1];
             q += 2 + unhashedLen;          // skip unhashed subpackets
+            if (q + 1 >= sig.Length)
+                throw new ArgumentException("Truncated signature MPI.");
             q += 2;                         // skip the left 16 bits of the hash
+            if (q + 1 >= sig.Length)
+                throw new ArgumentException("Truncated signature MPI.");
             int bits = (sig[q] << 8) | sig[q + 1];
             q += 2;
             int len = (bits + 7) / 8;
+            if (q + len > sig.Length)
+                throw new ArgumentException("Truncated signature MPI.");
             return Slice(sig, q, len);
         }
 
@@ -187,8 +198,16 @@ namespace KPPasskeyChecker.Shared.Pgp
                 int spLen;
                 byte first = sig[p];
                 if (first < 192) { spLen = first; p += 1; }
-                else if (first < 255) { spLen = ((first - 192) << 8) + sig[p + 1] + 192; p += 2; }
-                else { spLen = (sig[p + 1] << 24) | (sig[p + 2] << 16) | (sig[p + 3] << 8) | sig[p + 4]; p += 5; }
+                else if (first < 255)
+                {
+                    if (p + 1 >= end) break;
+                    spLen = ((first - 192) << 8) + sig[p + 1] + 192; p += 2;
+                }
+                else
+                {
+                    if (p + 4 >= end) break;
+                    spLen = (sig[p + 1] << 24) | (sig[p + 2] << 16) | (sig[p + 3] << 8) | sig[p + 4]; p += 5;
+                }
                 if (spLen <= 0 || p + spLen > end) break;
 
                 int type = sig[p] & 0x7F;     // strip the critical bit
@@ -215,6 +234,7 @@ namespace KPPasskeyChecker.Shared.Pgp
         private static byte[] ReadLiteralContent(byte[] buf, int bodyStart, int bodyLen)
         {
             // Literal Data packet: format(1) fileNameLen(1) fileName(n) date(4) content...
+            if (bodyLen < 2) throw new ArgumentException("Literal data packet too short.");
             int fileNameLen = buf[bodyStart + 1];
             int headerLen = 1 + 1 + fileNameLen + 4;
             int contentStart = bodyStart + headerLen;
