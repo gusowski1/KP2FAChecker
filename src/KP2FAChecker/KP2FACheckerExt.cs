@@ -1,4 +1,5 @@
 using System;
+using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
 using KeePass.Plugins;
@@ -17,6 +18,9 @@ namespace KP2FAChecker
         private ToolStripMenuItem _menuItem;
         private ToolStripSeparator _menuSeparator;
         private ToolStripMenuItem _entryMenuItem;
+        // One shared 16x16 icon instance for both menu entries; disposed in Terminate.
+        private Image _menuIcon;
+        private Icon _pluginIcon;
 
         /// <summary>
         /// Lets KeePass check whether a newer plugin version is available. KeePass downloads
@@ -41,23 +45,28 @@ namespace KP2FAChecker
 
             TfaDirectoryService.Initialize(_settings, cacheDir);
 
-            // Hand the column provider the KeePass main-window icon so the entry-detail window
-            // shows it in its title bar, like a native KeePass dialog.
-            _columnProvider = new TfaColumnProvider(host.MainWindow.Icon);
+            // Build the plugin icon once; reuse as both menu Image and dialog title-bar Icon.
+            _menuIcon = PluginIcon.Create16(host.MainWindow.ClientIcons.Images[0]);
+            _pluginIcon = Icon.FromHandle(((Bitmap)_menuIcon).GetHicon());
+
+            _columnProvider = new TfaColumnProvider(_pluginIcon);
             host.ColumnProviderPool.Add(_columnProvider);
 
             // A leading separator sets the plugin's entry apart in the Tools menu — the
             // convention other plugins follow to group their own items.
+
             ToolStripItemCollection toolsItems = host.MainWindow.ToolsMenu.DropDownItems;
             _menuSeparator = new ToolStripSeparator();
             toolsItems.Add(_menuSeparator);
             _menuItem = new ToolStripMenuItem("2FA Checker &Settings...");
+            _menuItem.Image = _menuIcon;
             _menuItem.Click += OnSettingsMenuClick;
             toolsItems.Add(_menuItem);
 
             // Per-entry action: a right-click on an entry opens the same detail dialog the
-            // "2FA Methods" column shows on double-click. No icon yet (delivered separately).
+            // "2FA Methods" column shows on double-click.
             _entryMenuItem = new ToolStripMenuItem("Check 2FA Support");
+            _entryMenuItem.Image = _menuIcon;
             _entryMenuItem.Click += OnEntryMenuClick;
             host.MainWindow.EntryContextMenu.Items.Add(_entryMenuItem);
 
@@ -95,6 +104,19 @@ namespace KP2FAChecker
                 _host.MainWindow.ToolsMenu.DropDownItems.Remove(_menuSeparator);
                 _menuSeparator.Dispose();
                 _menuSeparator = null;
+            }
+
+            // Both menu items are removed/disposed above; now release the shared icons.
+            if (_pluginIcon != null)
+            {
+                _pluginIcon.Dispose();
+                _pluginIcon = null;
+            }
+
+            if (_menuIcon != null)
+            {
+                _menuIcon.Dispose();
+                _menuIcon = null;
             }
 
             TfaDirectoryService.Shutdown();
