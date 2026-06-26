@@ -337,19 +337,42 @@ switch ($Stage) {
         if ($alreadyBumped -and $alreadyPushed) {
             Write-Host "Version already bumped and branch already pushed -- skipping to PR." -ForegroundColor Yellow
         } else {
-            # Generate CHANGELOG section from branch commits.
-            Write-Host "==> Generating CHANGELOG section from branch commits" -ForegroundColor Cyan
-            $commits = Get-BranchCommits
-            if ($commits.Count -eq 0) { $commits = @("- (no feature commits found on branch)") }
-            $sectionText = Format-ChangelogSection $Version $commits
-            Set-ChangelogSection $Version $sectionText
+            # Generate CHANGELOG section from branch commits — only if no section for this
+            # version exists yet (allows manually writing the CHANGELOG before Prepare).
+            $changelogPath = Join-Path $RepoRoot 'CHANGELOG.md'
+            $changelogHasSection = (Test-Path $changelogPath) -and
+                ((Get-Content $changelogPath) -match ('^##\s*\[' + [regex]::Escape($Version) + '\]'))
+            if ($changelogHasSection) {
+                $sectionText = Get-ChangelogSection $Version
+                $hasSubsections = $sectionText -match '###\s+(Added|Changed|Fixed|Security|Removed|Deprecated)'
+                if ($hasSubsections) {
+                    Write-Host "==> CHANGELOG.md ## [$Version] is already in Keep a Changelog format." -ForegroundColor DarkGray
+                } else {
+                    Write-Host "==> CHANGELOG.md ## [$Version] exists but lacks subsections -- reformatting." -ForegroundColor Yellow
+                    $rawLines = ($sectionText -split "`n") | Where-Object { $_ -match '^\s*-\s+' }
+                    if (-not $rawLines) { $rawLines = @("- (no entries found)") }
+                    $sectionText = Format-ChangelogSection $Version @($rawLines)
+                    Set-ChangelogSection $Version $sectionText
+                    Write-Host "  Reformatted. Review / edit the file if needed:" -ForegroundColor Yellow
+                    Write-Host ("  {0}" -f $changelogPath)
+                }
+                Write-Host ""
+                ($sectionText -split "`n") | ForEach-Object { Write-Host "  | $_" }
+                Write-Host ""
+            } else {
+                Write-Host "==> Generating CHANGELOG section from branch commits" -ForegroundColor Cyan
+                $commits = Get-BranchCommits
+                if ($commits.Count -eq 0) { $commits = @("- (no feature commits found on branch)") }
+                $sectionText = Format-ChangelogSection $Version $commits
+                Set-ChangelogSection $Version $sectionText
 
-            Write-Host ""
-            Write-Host "  CHANGELOG.md written. Review / edit the file now if needed:" -ForegroundColor Yellow
-            Write-Host ("  {0}" -f (Join-Path $RepoRoot 'CHANGELOG.md'))
-            Write-Host ""
-            ($sectionText -split "`n") | ForEach-Object { Write-Host "  | $_" }
-            Write-Host ""
+                Write-Host ""
+                Write-Host "  CHANGELOG.md written. Review / edit the file now if needed:" -ForegroundColor Yellow
+                Write-Host ("  {0}" -f $changelogPath)
+                Write-Host ""
+                ($sectionText -split "`n") | ForEach-Object { Write-Host "  | $_" }
+                Write-Host ""
+            }
 
             Confirm-Or-Exit "Proceed with version bump, commit, push and PR?"
 
