@@ -185,6 +185,7 @@ namespace KPPasskeyChecker.Shared.Pgp
             if (id != null) return id;
 
             int q = hashedRegionLen;
+            if (q + 1 >= sig.Length) return null;
             int unhashedLen = (sig[q] << 8) | sig[q + 1];
             return ScanSubpacketsForIssuer(sig, q + 2, unhashedLen);
         }

@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using KeePass.Plugins;
 using KeePassLib;
@@ -21,6 +22,13 @@ namespace KP2FAChecker
         // One shared 16x16 icon instance for both menu entries; disposed in Terminate.
         private Image _menuIcon;
         private Icon _pluginIcon;
+        // Native HICON behind _pluginIcon. Icon.FromHandle does not own it, so Icon.Dispose
+        // will not release it — we must DestroyIcon it ourselves in Terminate.
+        private IntPtr _menuIconHandle;
+
+        // Releases the native icon handle created by Bitmap.GetHicon (not freed by Icon.Dispose).
+        [DllImport("user32.dll")]
+        private static extern bool DestroyIcon(IntPtr hIcon);
 
         /// <summary>
         /// Lets KeePass check whether a newer plugin version is available. KeePass downloads
@@ -46,8 +54,16 @@ namespace KP2FAChecker
             TfaDirectoryService.Initialize(_settings, cacheDir);
 
             // Build the plugin icon once; reuse as both menu Image and dialog title-bar Icon.
-            _menuIcon = PluginIcon.Create16(host.MainWindow.ClientIcons.Images[0]);
-            _pluginIcon = Icon.FromHandle(((Bitmap)_menuIcon).GetHicon());
+            try
+            {
+                _menuIcon = PluginIcon.Create16(host.MainWindow.ClientIcons.Images[0]);
+                _menuIconHandle = ((Bitmap)_menuIcon).GetHicon();
+                _pluginIcon = Icon.FromHandle(_menuIconHandle);
+            }
+            catch
+            {
+                // Icon is optional; plugin loads without it if KeePass ClientIcons are unavailable.
+            }
 
             _columnProvider = new TfaColumnProvider(_pluginIcon);
             host.ColumnProviderPool.Add(_columnProvider);
@@ -111,6 +127,13 @@ namespace KP2FAChecker
             {
                 _pluginIcon.Dispose();
                 _pluginIcon = null;
+            }
+
+            // Icon.Dispose does not free the native HICON from GetHicon; release it explicitly.
+            if (_menuIconHandle != IntPtr.Zero)
+            {
+                DestroyIcon(_menuIconHandle);
+                _menuIconHandle = IntPtr.Zero;
             }
 
             if (_menuIcon != null)
