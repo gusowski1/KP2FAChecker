@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `release.ps1` uses the section for the version being released as the GitHub release notes,
 so keep each `## [x.y.z]` heading and its body accurate before running a release.
 
+## [0.3.0] - 2026-06-26
+
+### Added
+- Plugin icon (16×16, KeePass key with amber badge) shown in the Tools menu, entry
+  context menu, and detail dialog title bar.
+- Self-check harness (`tools/SelfCheck`) for offline regression testing of core logic
+  (method-token parsing, scope mapping, domain matching, PGP verification path) without
+  a running KeePass process.
+- Self-check runs automatically at the start of the release Prepare stage; the release
+  aborts immediately if any check fails.
+
+### Fixed
+- GDI handle leak: the native HICON created by `Bitmap.GetHicon()` is now released via
+  `DestroyIcon` in `Terminate` (`Icon.Dispose` does not free it).
+- PGP packet parser: added bounds checks before multi-byte reads in the signature and
+  unhashed-subpacket paths to prevent out-of-bounds reads on malformed input.
+
 ## [0.2.0] - 2026-06-24
 ### Added
 - Per-entry detail window: double-click the **2FA Methods** column cell to open a

@@ -202,6 +202,30 @@ function Confirm-Or-Exit([string]$prompt) {
     if ($ans -notmatch '^(y|yes)$') { Write-Host "Aborted." -ForegroundColor Yellow; exit 2 }
 }
 
+function Format-ChangelogSection([string]$ver, [string[]]$rawCommits) {
+    # Categorise commit subjects into Keep-a-Changelog sections.
+    # Recognised prefixes (conventional commits): feat/add -> Added; fix/bugfix -> Fixed;
+    # security/sec -> Security; chore/build/refactor/docs/style/perf/test -> Changed.
+    # Unrecognised prefix -> Added. Prefix + colon is stripped from the displayed text.
+    $added = @(); $changed = @(); $fixed = @(); $security = @()
+    foreach ($raw in $rawCommits) {
+        $subject = ($raw -replace '^-\s*', '').Trim()
+        if     ($subject -match '^(feat(ure)?|add)[:\s]+(.+)$')             { $added    += '- ' + $Matches[3].Trim() }
+        elseif ($subject -match '^(fix|bugfix)[:\s]+(.+)$')                 { $fixed    += '- ' + $Matches[2].Trim() }
+        elseif ($subject -match '^(sec(urity)?)[:\s]+(.+)$')                { $security += '- ' + $Matches[3].Trim() }
+        elseif ($subject -match '^(chore|build|refactor|docs?|style|perf|test)[:\s]+(.+)$') { $changed += '- ' + $Matches[2].Trim() }
+        else                                                                 { $added    += '- ' + $subject }
+    }
+    $today = Get-Date -Format 'yyyy-MM-dd'
+    $lines = @("## [$ver] - $today", '')
+    if ($added.Count    -gt 0) { $lines += '### Added';    $lines += $added;    $lines += '' }
+    if ($changed.Count  -gt 0) { $lines += '### Changed';  $lines += $changed;  $lines += '' }
+    if ($fixed.Count    -gt 0) { $lines += '### Fixed';    $lines += $fixed;    $lines += '' }
+    if ($security.Count -gt 0) { $lines += '### Security'; $lines += $security; $lines += '' }
+    while ($lines.Count -gt 0 -and $lines[-1] -eq '') { $lines = $lines[0..($lines.Count - 2)] }
+    return $lines -join "`n"
+}
+
 function Get-TypeArgs([string]$t) {
     switch ($t) {
         'draft'      { return @('--draft') }
@@ -317,8 +341,7 @@ switch ($Stage) {
             Write-Host "==> Generating CHANGELOG section from branch commits" -ForegroundColor Cyan
             $commits = Get-BranchCommits
             if ($commits.Count -eq 0) { $commits = @("- (no feature commits found on branch)") }
-            $today       = Get-Date -Format "yyyy-MM-dd"
-            $sectionText = ("## [{0}] - {1}`n`n### Added`n{2}" -f $Version, $today, ($commits -join "`n"))
+            $sectionText = Format-ChangelogSection $Version $commits
             Set-ChangelogSection $Version $sectionText
 
             Write-Host ""
