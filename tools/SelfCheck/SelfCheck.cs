@@ -1,12 +1,14 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
+using KeePassLib;
+using KeePassLib.Security;
 using KP2FAChecker.Data;
+using KP2FAChecker.UI;
 using KPPasskeyChecker.SelfCheck;
-using KPPasskeyChecker.Shared.Pgp;
+using KeeRadar.Shared.Pgp;
 
 namespace KP2FAChecker.SelfCheck
 {
@@ -33,6 +35,7 @@ namespace KP2FAChecker.SelfCheck
             CheckScopeEndpointMapping();
             CheckSkipDisabledRule();
             CheckFormatEntry();
+            CheckStoredOtpState();
             CheckSignedCacheKeyDistinctness();
             CheckDomainCandidatesEtldPlusOne();
             CheckPgpPath();
@@ -104,7 +107,7 @@ namespace KP2FAChecker.SelfCheck
             TfaEntry empty = Map("disabled.com", new Dictionary<string, object>());
             Assert("missing methods -> SupportsAny == false", !empty.SupportsAny);
             Assert("missing methods -> FormatEntry empty",
-                FormatEntry(empty) == string.Empty);
+                TfaColumnProvider.FormatEntry(empty) == string.Empty);
 
             TfaEntry emptyArray = Map("disabled.com", Methods());
             Assert("empty methods array -> SupportsAny == false", !emptyArray.SupportsAny);
@@ -121,17 +124,73 @@ namespace KP2FAChecker.SelfCheck
 
             TfaEntry simple = Map("example.com", Methods("totp", "u2f", "sms"));
             Assert("totp+u2f+sms -> \"TOTP, Security Key, SMS\"",
-                FormatEntry(simple) == "TOTP, Security Key, SMS");
+                TfaColumnProvider.FormatEntry(simple) == "TOTP, Security Key, SMS");
 
             // custom-software with product names -> "Software (Duo)".
             var data = Methods("totp", "u2f", "custom-software");
             data["custom-software"] = ArrayOf("Duo");
             TfaEntry withSoftware = Map("example.com", data);
             Assert("totp+u2f+custom-software(Duo) -> \"TOTP, Security Key, Software (Duo)\"",
-                FormatEntry(withSoftware) == "TOTP, Security Key, Software (Duo)");
+                TfaColumnProvider.FormatEntry(withSoftware) == "TOTP, Security Key, Software (Duo)");
 
             TfaEntry blank = Map("example.com", new Dictionary<string, object>());
-            Assert("no methods -> empty string", FormatEntry(blank) == string.Empty);
+            Assert("no methods -> empty string", TfaColumnProvider.FormatEntry(blank) == string.Empty);
+        }
+
+        // --- stored-OTP state (story F-H) ------------------------------------------------------
+        // Exercises the production HasStoredOtp field-name scan and the ComposeCellValue overlay
+        // covering all seven story scenarios. Touching TfaColumnProvider JIT-loads KeePass, which
+        // run-selfcheck.ps1 stages next to the harness .exe for this purpose.
+        private static void CheckStoredOtpState()
+        {
+            Section("stored-OTP state (column overlay)");
+
+            // ComposeCellValue truth table -----------------------------------------------------
+            // 2: directory match + stored OTP -> "[Active] <value>" (one prefix only).
+            Assert("dir value + stored -> \"[Active] ...\"",
+                TfaColumnProvider.ComposeCellValue("TOTP, Security Key", true)
+                    == "[Active] TOTP, Security Key");
+            // 1: directory match + no stored OTP -> "[Inactive] <value>".
+            Assert("dir value + not stored -> \"[Inactive] ...\"",
+                TfaColumnProvider.ComposeCellValue("TOTP, Security Key", false)
+                    == "[Inactive] TOTP, Security Key");
+            // 3 + 5: no directory match + stored OTP -> "Active".
+            Assert("no dir + stored -> \"Active\"",
+                TfaColumnProvider.ComposeCellValue(string.Empty, true) == "Active");
+            // 4 + 5: neither -> empty.
+            Assert("no dir + not stored -> empty",
+                TfaColumnProvider.ComposeCellValue(string.Empty, false) == string.Empty);
+            Assert("null dir + stored -> \"Active\"",
+                TfaColumnProvider.ComposeCellValue(null, true) == "Active");
+
+            // HasStoredOtp field-name scan -----------------------------------------------------
+            Assert("no fields -> not stored",
+                !TfaColumnProvider.HasStoredOtp(EntryWith()));
+            Assert("TimeOtp-Secret field -> stored",
+                TfaColumnProvider.HasStoredOtp(EntryWith("TimeOtp-Secret")));
+            Assert("HmacOtp-Secret field -> stored",
+                TfaColumnProvider.HasStoredOtp(EntryWith("HmacOtp-Secret")));
+            // 6: both OTP types present still count as one (and ComposeCellValue never doubles).
+            Assert("both HmacOtp- and TimeOtp- fields -> stored (no double prefix)",
+                TfaColumnProvider.HasStoredOtp(
+                    EntryWith("HmacOtp-Secret", "TimeOtp-Secret", "TimeOtp-Period")));
+            // Case-insensitive prefix match.
+            Assert("lowercase timeotp- field -> stored",
+                TfaColumnProvider.HasStoredOtp(EntryWith("timeotp-secret")));
+            // Unrelated standard fields must not trigger.
+            Assert("UserName/Password/Title -> not stored",
+                !TfaColumnProvider.HasStoredOtp(
+                    EntryWith(PwDefs.UserNameField, PwDefs.PasswordField, PwDefs.TitleField)));
+        }
+
+        // Builds a PwEntry carrying the given string-field names (irrelevant values; the production
+        // code only reads names — scenario 7 forbids reading values).
+        private static PwEntry EntryWith(params string[] fieldNames)
+        {
+            PwEntry pe = new PwEntry(true, true);
+            foreach (string name in fieldNames)
+                pe.Strings.Set(name, new ProtectedString(false, "x"));
+            return pe;
         }
 
         // --- signed vs unsigned cache-key distinctness -----------------------------------------
@@ -192,46 +251,6 @@ namespace KP2FAChecker.SelfCheck
             byte[] rdata = SharedChecks.HexToBytes(TfaTrustAnchor.CertRecordHex);
             rdata[rdata.Length - 8] ^= 0xFF; // flip a byte well inside the modulus
             return OpenPgpRsaPublicKey.FromCertRecord(rdata);
-        }
-
-        // --- mirror of TfaColumnProvider.FormatEntry / AppendNames -----------------------------
-        // TfaColumnProvider derives from KeePass's ColumnProvider, so referencing it at runtime
-        // would force the KeePass assembly to load (it is only a compile reference here). The
-        // format logic is mirrored verbatim from the source so the harness stays KeePass-free.
-        private static string FormatEntry(TfaEntry entry)
-        {
-            if (entry == null || !entry.SupportsAny) return string.Empty;
-
-            var parts = new List<string>(entry.Methods.Count);
-            foreach (TfaMethod method in entry.Methods)
-            {
-                string label = TfaMethods.Label(method);
-                if (label.Length == 0) continue;
-
-                if (method == TfaMethod.CustomSoftware)
-                    label = AppendNames(label, entry.CustomSoftware);
-                else if (method == TfaMethod.CustomHardware)
-                    label = AppendNames(label, entry.CustomHardware);
-
-                parts.Add(label);
-            }
-
-            return string.Join(", ", parts.ToArray());
-        }
-
-        private static string AppendNames(string label, IReadOnlyList<string> names)
-        {
-            if (names == null || names.Count == 0) return label;
-
-            var sb = new StringBuilder(label);
-            sb.Append(" (");
-            for (int i = 0; i < names.Count; i++)
-            {
-                if (i > 0) sb.Append(", ");
-                sb.Append(names[i]);
-            }
-            sb.Append(")");
-            return sb.ToString();
         }
 
         // --- helpers ---------------------------------------------------------------------------

@@ -1,10 +1,11 @@
+﻿// Shared KeeRadar infrastructure — synced from KPPasskeyChecker/src/Shared via sync-shared.ps1; do not edit here
 using System;
 using System.Drawing;
 using System.Windows.Forms;
 using KeePass.UI;
 using KeePass.Util;
 
-namespace KPPasskeyChecker.Shared.KeePassUi
+namespace KeeRadar.Shared.KeePassUi
 {
     /// <summary>
     /// A plugin-agnostic, read-only detail window for a single directory entry. It renders an

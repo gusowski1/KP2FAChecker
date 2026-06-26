@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using KP2FAChecker.Settings;
-using KPPasskeyChecker.Shared.Caching;
-using KPPasskeyChecker.Shared.DomainMatching;
-using KPPasskeyChecker.Shared.Http;
+using KeeRadar.Shared.Caching;
+using KeeRadar.Shared.DomainMatching;
+using KeeRadar.Shared.Http;
 
 namespace KP2FAChecker.Data
 {

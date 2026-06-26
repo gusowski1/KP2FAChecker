@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
-using KPPasskeyChecker.Shared.Caching;
-using KPPasskeyChecker.Shared.Http;
-using KPPasskeyChecker.Shared.Pgp;
+using KeeRadar.Shared.Caching;
+using KeeRadar.Shared.Http;
+using KeeRadar.Shared.Pgp;
 
 namespace KP2FAChecker.Data
 {

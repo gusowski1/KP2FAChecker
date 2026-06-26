@@ -1,5 +1,5 @@
-using System;
-using KPPasskeyChecker.Shared.Pgp;
+﻿using System;
+using KeeRadar.Shared.Pgp;
 
 namespace KP2FAChecker.Data
 {

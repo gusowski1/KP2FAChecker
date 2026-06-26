@@ -1,8 +1,9 @@
+﻿// Shared KeeRadar infrastructure — synced from KPPasskeyChecker/src/Shared via sync-shared.ps1; do not edit here
 using System;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace KPPasskeyChecker.Shared.Pgp
+namespace KeeRadar.Shared.Pgp
 {
     /// <summary>
     /// An RSA public key parsed from an OpenPGP version-4 public-key packet (RFC 4880).

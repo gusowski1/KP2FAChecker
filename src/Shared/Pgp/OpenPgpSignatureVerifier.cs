@@ -1,10 +1,11 @@
+﻿// Shared KeeRadar infrastructure — synced from KPPasskeyChecker/src/Shared via sync-shared.ps1; do not edit here
 using System;
 using System.IO;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace KPPasskeyChecker.Shared.Pgp
+namespace KeeRadar.Shared.Pgp
 {
     /// <summary>
     /// Verifies an OpenPGP signed message (as produced by <c>gpg --sign</c>) against a single

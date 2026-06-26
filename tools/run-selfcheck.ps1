@@ -61,8 +61,13 @@ if (Test-Path $OutExe) { Remove-Item $OutExe -Force }
 $FixturesSrc = Join-Path $ToolsDir 'SelfCheck\fixtures'
 $FixturesDst = Join-Path $ToolsDir 'fixtures'
 
+# The stored-OTP self-test exercises TfaColumnProvider.HasStoredOtp/ComposeCellValue directly;
+# touching that type JIT-loads the KeePass assembly it derives from, so KeePass.exe must sit next to
+# the harness .exe at run time.
+$KeePassDst = Join-Path $ToolsDir ([System.IO.Path]::GetFileName($KeePassExe))
+
 # Compile + run inside try; clean up build/run artifacts in finally so a csc failure (or any
-# mid-run error) never leaves the staged .exe / fixtures copy behind.
+# mid-run error) never leaves the staged .exe / fixtures / KeePass copy behind.
 $code = 1
 try {
     Write-Host "==> Compiling self-check harness (csc /langversion:5)" -ForegroundColor Cyan
@@ -80,6 +85,8 @@ try {
     if (Test-Path $FixturesDst) { Remove-Item $FixturesDst -Recurse -Force }
     Copy-Item $FixturesSrc $FixturesDst -Recurse -Force
 
+    if ($KeePassDst -ne $KeePassExe) { Copy-Item $KeePassExe $KeePassDst -Force }
+
     Write-Host "==> Running self-check" -ForegroundColor Cyan
     & $OutExe
     $code = $LASTEXITCODE
@@ -87,6 +94,7 @@ try {
 finally {
     Remove-Item $OutExe -Force -ErrorAction SilentlyContinue
     Remove-Item $FixturesDst -Recurse -Force -ErrorAction SilentlyContinue
+    if ($KeePassDst -ne $KeePassExe) { Remove-Item $KeePassDst -Force -ErrorAction SilentlyContinue }
 }
 
 Write-Host ""
