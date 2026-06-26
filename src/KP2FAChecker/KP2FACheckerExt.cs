@@ -1,7 +1,10 @@
 using System;
+using System.Drawing;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using KeePass.Plugins;
+using KeePassLib;
 using KP2FAChecker.Data;
 using KP2FAChecker.Settings;
 using KP2FAChecker.UI;
@@ -15,6 +18,17 @@ namespace KP2FAChecker
         private TfaColumnProvider _columnProvider;
         private ToolStripMenuItem _menuItem;
         private ToolStripSeparator _menuSeparator;
+        private ToolStripMenuItem _entryMenuItem;
+        // One shared 16x16 icon instance for both menu entries; disposed in Terminate.
+        private Image _menuIcon;
+        private Icon _pluginIcon;
+        // Native HICON behind _pluginIcon. Icon.FromHandle does not own it, so Icon.Dispose
+        // will not release it — we must DestroyIcon it ourselves in Terminate.
+        private IntPtr _menuIconHandle;
+
+        // Releases the native icon handle created by Bitmap.GetHicon (not freed by Icon.Dispose).
+        [DllImport("user32.dll")]
+        private static extern bool DestroyIcon(IntPtr hIcon);
 
         /// <summary>
         /// Lets KeePass check whether a newer plugin version is available. KeePass downloads
@@ -39,19 +53,38 @@ namespace KP2FAChecker
 
             TfaDirectoryService.Initialize(_settings, cacheDir);
 
-            // Hand the column provider the KeePass main-window icon so the entry-detail window
-            // shows it in its title bar, like a native KeePass dialog.
-            _columnProvider = new TfaColumnProvider(host.MainWindow.Icon);
+            // Build the plugin icon once; reuse as both menu Image and dialog title-bar Icon.
+            try
+            {
+                _menuIcon = PluginIcon.Create16(host.MainWindow.ClientIcons.Images[0]);
+                _menuIconHandle = ((Bitmap)_menuIcon).GetHicon();
+                _pluginIcon = Icon.FromHandle(_menuIconHandle);
+            }
+            catch
+            {
+                // Icon is optional; plugin loads without it if KeePass ClientIcons are unavailable.
+            }
+
+            _columnProvider = new TfaColumnProvider(_pluginIcon);
             host.ColumnProviderPool.Add(_columnProvider);
 
             // A leading separator sets the plugin's entry apart in the Tools menu — the
             // convention other plugins follow to group their own items.
+
             ToolStripItemCollection toolsItems = host.MainWindow.ToolsMenu.DropDownItems;
             _menuSeparator = new ToolStripSeparator();
             toolsItems.Add(_menuSeparator);
             _menuItem = new ToolStripMenuItem("2FA Checker &Settings...");
+            _menuItem.Image = _menuIcon;
             _menuItem.Click += OnSettingsMenuClick;
             toolsItems.Add(_menuItem);
+
+            // Per-entry action: a right-click on an entry opens the same detail dialog the
+            // "2FA Methods" column shows on double-click.
+            _entryMenuItem = new ToolStripMenuItem("Check 2FA Support");
+            _entryMenuItem.Image = _menuIcon;
+            _entryMenuItem.Click += OnEntryMenuClick;
+            host.MainWindow.EntryContextMenu.Items.Add(_entryMenuItem);
 
             return true;
         }
@@ -64,6 +97,14 @@ namespace KP2FAChecker
             {
                 _host.ColumnProviderPool.Remove(_columnProvider);
                 _columnProvider = null;
+            }
+
+            if (_entryMenuItem != null)
+            {
+                _host.MainWindow.EntryContextMenu.Items.Remove(_entryMenuItem);
+                _entryMenuItem.Click -= OnEntryMenuClick;
+                _entryMenuItem.Dispose();
+                _entryMenuItem = null;
             }
 
             if (_menuItem != null)
@@ -79,6 +120,26 @@ namespace KP2FAChecker
                 _host.MainWindow.ToolsMenu.DropDownItems.Remove(_menuSeparator);
                 _menuSeparator.Dispose();
                 _menuSeparator = null;
+            }
+
+            // Both menu items are removed/disposed above; now release the shared icons.
+            if (_pluginIcon != null)
+            {
+                _pluginIcon.Dispose();
+                _pluginIcon = null;
+            }
+
+            // Icon.Dispose does not free the native HICON from GetHicon; release it explicitly.
+            if (_menuIconHandle != IntPtr.Zero)
+            {
+                DestroyIcon(_menuIconHandle);
+                _menuIconHandle = IntPtr.Zero;
+            }
+
+            if (_menuIcon != null)
+            {
+                _menuIcon.Dispose();
+                _menuIcon = null;
             }
 
             TfaDirectoryService.Shutdown();
@@ -109,6 +170,24 @@ namespace KP2FAChecker
 
             if (_host != null)
                 _host.MainWindow.RefreshEntriesList();
+        }
+
+        private void OnEntryMenuClick(object sender, EventArgs e)
+        {
+            if (_host == null || _columnProvider == null) return;
+
+            PwEntry[] selected = _host.MainWindow.GetSelectedEntries();
+            if (selected == null || selected.Length == 0)
+            {
+                MessageBox.Show(_host.MainWindow as IWin32Window,
+                    "Please select an entry first.", "2FA Checker",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            // The detail dialog is per-entry; act on the first selected entry. The column's
+            // double-click flow is reused verbatim, including its own no-URL / no-data handling.
+            _columnProvider.ShowDetailDialog(selected[0]);
         }
     }
 }

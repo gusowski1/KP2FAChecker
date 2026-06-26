@@ -29,6 +29,8 @@ namespace KPPasskeyChecker.Shared.Pgp
             {
                 // New format.
                 tag = b0 & 0x3F;
+                if (pos >= buf.Length)
+                    throw new ArgumentException("Truncated new-format length at offset " + pos + ".");
                 byte l0 = buf[pos];
                 if (l0 < 192)
                 {
@@ -37,11 +39,15 @@ namespace KPPasskeyChecker.Shared.Pgp
                 }
                 else if (l0 < 224)
                 {
+                    if (pos + 1 >= buf.Length)
+                        throw new ArgumentException("Truncated 2-byte new-format length at offset " + pos + ".");
                     bodyLen = ((l0 - 192) << 8) + buf[pos + 1] + 192;
                     pos += 2;
                 }
                 else if (l0 == 255)
                 {
+                    if (pos + 4 >= buf.Length)
+                        throw new ArgumentException("Truncated 5-byte new-format length at offset " + pos + ".");
                     bodyLen = (buf[pos + 1] << 24) | (buf[pos + 2] << 16) | (buf[pos + 3] << 8) | buf[pos + 4];
                     pos += 5;
                 }
@@ -62,10 +68,14 @@ namespace KPPasskeyChecker.Shared.Pgp
                         pos += 1;
                         break;
                     case 1:
+                        if (pos + 1 >= buf.Length)
+                            throw new ArgumentException("Truncated 2-byte old-format length at offset " + pos + ".");
                         bodyLen = (buf[pos] << 8) | buf[pos + 1];
                         pos += 2;
                         break;
                     case 2:
+                        if (pos + 3 >= buf.Length)
+                            throw new ArgumentException("Truncated 4-byte old-format length at offset " + pos + ".");
                         bodyLen = (buf[pos] << 24) | (buf[pos + 1] << 16) | (buf[pos + 2] << 8) | buf[pos + 3];
                         pos += 4;
                         break;
