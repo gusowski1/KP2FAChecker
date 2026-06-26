@@ -140,7 +140,7 @@ $compileItems
 
 # --- 4. Package .plgx ------------------------------------------------------
 Write-Step "Packaging .plgx (KeePass --plgx-create)"
-$proc = Start-Process -FilePath $KeePassExe -ArgumentList ('--plgx-create "{0}"' -f $StageDir) -PassThru -Wait
+$proc = Start-Process -FilePath $KeePassExe -ArgumentList ('--plgx-create "{0}" -plgx-prereq-kp:2.18 -plgx-prereq-net:4.6' -f $StageDir) -PassThru -Wait
 if ($proc.ExitCode -ne 0) { throw "KeePass --plgx-create exited with code $($proc.ExitCode)." }
 Start-Sleep -Milliseconds 500
 if (-not (Test-Path $StagePlgx)) { throw "Build produced no .plgx ($StagePlgx missing)." }

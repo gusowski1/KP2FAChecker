@@ -29,6 +29,18 @@ Both come from the same `src\` sources, so they are functionally identical — s
 
 **Prerequisites:** `KeePass.exe` at `Libs\KeePass.exe` (not in the repo / not on NuGet; used for packaging and as a compile reference, never bundled).
 
+**Minimum versions (empirically verified 2026-06-25 via compile-bisection in `..\probe\`):**
+
+| Axis | Minimum | Determining factor |
+|---|---|---|
+| KeePass | **2.18** | `Plugin.UpdateUrl` introduced in 2.18 |
+| .NET Framework | **4.6** | `HashAlgorithmName` / `RSASignaturePadding` introduced in .NET 4.6 (`Shared/Pgp/`) |
+
+Both prereqs are embedded in the `.plgx` (`-plgx-prereq-kp:2.18 -plgx-prereq-net:4.6` in `build.ps1`).
+Use **KeePass 2.18** as `Libs\KeePass.exe` to act as a compile-time tripwire: the build fails immediately
+if new code accidentally references a newer KeePass API. Bump the reference *and* the prereqs in
+`build.ps1` only when a newer API is intentionally required.
+
 Target framework: `.NET 4.8` (`net48`). UI is WinForms (not WPF). **Keep all source C# 5-compatible** — the `.plgx` is recompiled as C# 5 on the user's machine, so modern C# / NRT syntax would break it.
 
 ## Release
@@ -50,9 +62,25 @@ release.ps1 -Version <x.y.z> -Type <draft|prerelease|release> [-Stage Preview|Pr
   release `vX.Y.Z` (tag on `main`) with the `.plgx`/`.dll` assets and the CHANGELOG section as notes.
 
 `-Type` maps to `--draft` / `--prerelease` / (none = a normal "Latest" release). GitHub shows a
-SHA-256 digest per asset itself, so no `SHA256SUMS` file is shipped. Add the new `## [x.y.z]` section
-to `CHANGELOG.md` before releasing. The umbrella **`..\release-all.ps1`** releases both plugins in
-lockstep at one version; run a single repo's `release.ps1` to release one plugin.
+SHA-256 digest per asset itself, so no `SHA256SUMS` file is shipped. `Prepare` generates the
+`## [x.y.z]` section in `CHANGELOG.md` automatically from branch commits — review/edit it before
+confirming. The umbrella **`..\release-all.ps1`** releases both plugins in lockstep at one version;
+run a single repo's `release.ps1` to release one plugin.
+
+### Development workflow per version
+
+Feature work for a release follows a lightweight branch model — no per-feature branches:
+
+1. **Create the release branch** — run `release.ps1 -Stage Preview` first (dry-run), then
+   `release.ps1 -Stage Prepare` to bump the version, create `release/vX.Y.Z`, commit the bump,
+   push, and open the PR against `main`.
+2. **One commit per completed feature** — after each feature is done, Lars commits it directly on
+   `release/vX.Y.Z` with a clear, scoped message (e.g. `add 2FA scope self-test`).
+   The developer agent signals when a feature is ready by outputting a suggested commit message.
+3. **PR accumulates feature commits** — the single open PR `release/vX.Y.Z → main` is the
+   review surface for the whole version. No force-push; no squash during development.
+4. **Publish on merge** — once Lars merges the PR to `main`, run `release.ps1 -Stage Publish`
+   to tag `main` and create the GitHub release.
 
 ## Architecture
 
