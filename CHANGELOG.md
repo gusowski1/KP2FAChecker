@@ -7,10 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `release.ps1` uses the section for the version being released as the GitHub release notes,
 so keep each `## [x.y.z]` heading and its body accurate before running a release.
 
+## [0.4.0] - 2026-06-27
+
+### Added
+- update README: document [Active]/[Inactive] column status and stored-OTP detection
+- rename Shared namespace to KeeRadar.Shared.*, add [Active]/[Inactive] 2FA status prefix
+- Shared sync workflow (sync-shared.ps1 + agent rules)
+
 ## [0.3.0] - 2026-06-26
 
 ### Added
-- Plugin icon (16×16, KeePass key with amber badge) shown in the Tools menu, entry
+- Plugin icon (16Ã—16, KeePass key with amber badge) shown in the Tools menu, entry
   context menu, and detail dialog title bar.
 - Self-check harness (`tools/SelfCheck`) for offline regression testing of core logic
   (method-token parsing, scope mapping, domain matching, PGP verification path) without

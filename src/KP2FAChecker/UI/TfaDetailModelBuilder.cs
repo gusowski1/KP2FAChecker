@@ -1,7 +1,7 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text;
 using KP2FAChecker.Data;
-using KPPasskeyChecker.Shared.KeePassUi;
+using KeeRadar.Shared.KeePassUi;
 
 namespace KP2FAChecker.UI
 {

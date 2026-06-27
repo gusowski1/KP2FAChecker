@@ -1,6 +1,7 @@
+﻿// Shared KeeRadar infrastructure — synced from KPPasskeyChecker/src/Shared via sync-shared.ps1; do not edit here
 using System;
 
-namespace KPPasskeyChecker.Shared.Pgp
+namespace KeeRadar.Shared.Pgp
 {
     /// <summary>
     /// Minimal OpenPGP packet framing reader (RFC 4880 4.2). Supports old- and new-format

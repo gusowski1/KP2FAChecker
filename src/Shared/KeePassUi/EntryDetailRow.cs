@@ -1,6 +1,7 @@
+﻿// Shared KeeRadar infrastructure — synced from KPPasskeyChecker/src/Shared via sync-shared.ps1; do not edit here
 using System.Collections.Generic;
 
-namespace KPPasskeyChecker.Shared.KeePassUi
+namespace KeeRadar.Shared.KeePassUi
 {
     /// <summary>
     /// One typed row in the entry detail view. A plugin maps its own entry model to a list of these

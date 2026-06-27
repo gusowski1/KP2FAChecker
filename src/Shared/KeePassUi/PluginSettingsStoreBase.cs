@@ -1,6 +1,7 @@
+﻿// Shared KeeRadar infrastructure — synced from KPPasskeyChecker/src/Shared via sync-shared.ps1; do not edit here
 using KeePass.Plugins;
 
-namespace KPPasskeyChecker.Shared.KeePassUi
+namespace KeeRadar.Shared.KeePassUi
 {
     public abstract class PluginSettingsStoreBase
     {

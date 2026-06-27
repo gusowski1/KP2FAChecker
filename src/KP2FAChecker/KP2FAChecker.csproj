@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
@@ -16,7 +16,7 @@
 
   <!-- Shared infrastructure is compiled directly into this plugin assembly, so the shipped
        plugin is a single self-contained DLL (no separate Shared.dll). The Shared tree is reused
-       verbatim from KPPasskeyChecker (same source, KPPasskeyChecker.Shared.* namespaces). -->
+       verbatim from KPPasskeyChecker (same source, KeeRadar.Shared.* namespaces). -->
   <ItemGroup>
     <Compile Include="..\Shared\**\*.cs"
              Exclude="..\Shared\**\obj\**\*.cs;..\Shared\**\bin\**\*.cs">

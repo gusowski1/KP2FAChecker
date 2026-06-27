@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Text;
@@ -6,8 +6,8 @@ using System.Windows.Forms;
 using KeePass.UI;
 using KeePassLib;
 using KP2FAChecker.Data;
-using KPPasskeyChecker.Shared.DomainMatching;
-using KPPasskeyChecker.Shared.KeePassUi;
+using KeeRadar.Shared.DomainMatching;
+using KeeRadar.Shared.KeePassUi;
 
 namespace KP2FAChecker.UI
 {
@@ -17,6 +17,13 @@ namespace KP2FAChecker.UI
         // plugin "KP2faChecker" (tiuub), which a user may run alongside this one. A distinct title
         // avoids two identical column headers.
         public const string ColumnName = "2FA Methods";
+
+        // Entry-string-field name prefixes written by KeePass's built-in OTP generator: "HmacOtp-"
+        // (HOTP, counter-based) and "TimeOtp-" (TOTP, time-based). Presence of at least one such
+        // field means the user has already stored a one-time-password secret for this entry. We only
+        // ever inspect field *names*, never their (protected) values.
+        private const string HmacOtpFieldPrefix = "HmacOtp-";
+        private const string TimeOtpFieldPrefix = "TimeOtp-";
 
         // The KeePass main-window icon, shown in the entry-detail window's title bar so it looks
         // like a native KeePass dialog. Supplied by the plugin (which has the IPluginHost); may be
@@ -35,6 +42,18 @@ namespace KP2FAChecker.UI
 
         public override string GetCellData(string strCol, PwEntry pe)
         {
+            // The stored-OTP check runs regardless of directory availability or a URL, so an entry
+            // with a stored OTP secret but no directory match still shows "Active".
+            bool hasStoredOtp = HasStoredOtp(pe);
+
+            string directoryValue = LookupDirectoryValue(pe);
+            return ComposeCellValue(directoryValue, hasStoredOtp);
+        }
+
+        // Directory-only column value (or empty) for the entry, factoring out availability/URL/lookup
+        // gating from the stored-OTP overlay applied in ComposeCellValue.
+        private static string LookupDirectoryValue(PwEntry pe)
+        {
             if (!TfaDirectoryService.IsAvailable) return string.Empty;
 
             TfaDirectory dir = TfaDirectoryService.Current.Directory;
@@ -45,6 +64,47 @@ namespace KP2FAChecker.UI
 
             TfaEntry entry = Lookup(dir, host);
             return entry == null ? string.Empty : FormatEntry(entry);
+        }
+
+        /// <summary>
+        /// Combines the directory-derived column value with the entry's stored-OTP state into the
+        /// final cell text. Pure (KeePass-free) so the self-test harness can exercise every case:
+        /// <list type="bullet">
+        /// <item>directory match + stored OTP -&gt; "[Active] &lt;value&gt;"</item>
+        /// <item>directory match + no stored OTP -&gt; "[Inactive] &lt;value&gt;"</item>
+        /// <item>no directory match + stored OTP -&gt; "Active"</item>
+        /// <item>neither -&gt; empty</item>
+        /// </list>
+        /// The status indicator is a prefix so it always sits at position 0 regardless of the
+        /// directory value's length; "[Inactive]" surfaces that 2FA is possible but not yet set up.
+        /// </summary>
+        internal static string ComposeCellValue(string directoryValue, bool hasStoredOtp)
+        {
+            bool hasDirectoryValue = !string.IsNullOrEmpty(directoryValue);
+
+            if (hasDirectoryValue)
+                return (hasStoredOtp ? "[Active] " : "[Inactive] ") + directoryValue;
+
+            return hasStoredOtp ? "Active" : string.Empty;
+        }
+
+        /// <summary>
+        /// True when the entry carries at least one stored-OTP field (name prefix <c>HmacOtp-</c> or
+        /// <c>TimeOtp-</c>). Only field <em>names</em> are inspected via
+        /// <see cref="ProtectedStringDictionary.GetKeys"/> — values are never read or decrypted.
+        /// </summary>
+        internal static bool HasStoredOtp(PwEntry pe)
+        {
+            if (pe == null) return false;
+
+            foreach (string key in pe.Strings.GetKeys())
+            {
+                if (key == null) continue;
+                if (key.StartsWith(HmacOtpFieldPrefix, StringComparison.OrdinalIgnoreCase)
+                    || key.StartsWith(TimeOtpFieldPrefix, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
         }
 
         /// <summary>

@@ -157,6 +157,22 @@ KeePass's built-in plugin update check is wired up by overriding `Plugin.UpdateU
 
 `AnySupport` → `all.json` (disabled/empty entries skipped); each other scope maps to the matching method file. The settings dialog is opened from the Tools menu as a standalone dialog.
 
+## Shared code — sync rule
+
+`src\Shared` is a copy from **KPPasskeyChecker** (the canonical source). Do not edit files under `src\Shared` directly in this repo.
+
+**If a task requires a change to `src\Shared`:**
+
+1. Make the change in KPPasskeyChecker's `src\Shared` first.
+2. Run `.\sync-shared.ps1` in this repo to mirror it here.
+3. Build this plugin: `.\build.ps1`
+4. Confirm the build succeeds (exit code 0, both `.plgx` and `.dll` produced).
+5. Only then report the task as done.
+
+**After receiving a synced Shared (e.g. Lars ran sync-shared.ps1 and asks you to verify):**
+
+Run `.\build.ps1` and confirm it builds cleanly before marking anything done.
+
 ## Conventions
 
 - All code, identifiers, and comments must be in **English**.

@@ -1,10 +1,11 @@
+﻿// Shared KeeRadar infrastructure — synced from KPPasskeyChecker/src/Shared via sync-shared.ps1; do not edit here
 using System;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
-using KPPasskeyChecker.Shared.Caching;
+using KeeRadar.Shared.Caching;
 
-namespace KPPasskeyChecker.Shared.Http
+namespace KeeRadar.Shared.Http
 {
     public sealed class ConditionalHttpFetcher
     {

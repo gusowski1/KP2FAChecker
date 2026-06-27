@@ -15,7 +15,8 @@ methods that site supports — e.g. `TOTP, Security Key, SMS`.
 
 KP2FAChecker is **informational only**: it tells you which 2FA methods a website supports so you
 know what you could enable. It does not generate or store any codes or credentials and never
-modifies your entries — it only reads each entry's website address to look it up in the directory.
+modifies your entries — it only reads each entry's website address and field names (never field
+values) to look up the site in the directory and detect whether a TOTP/HOTP secret is already stored.
 
 > **Not the same as "2FA Support".** A separate third-party plugin,
 > [KP2faChecker](https://github.com/tiuub/KP2faChecker) by tiuub, adds a column titled
@@ -28,8 +29,8 @@ modifies your entries — it only reads each entry's website address to look it 
 
 ## Features
 
-- **2FA Methods column** in the main entry list, listing the methods each site supports
-  (blank when the site has no documented 2FA / is not in the directory).
+- **2FA Methods column** in the main entry list, showing which 2FA methods a site supports
+  and whether you already have a TOTP/HOTP secret stored in KeePass — at a glance, for every entry.
 - **Smart domain matching.** The lookup walks from the full host down to the registrable
   domain (eTLD+1, using the Public Suffix List), most-specific first.
 - **Configurable scope.** Show any 2FA support, or only sites supporting a specific method
@@ -75,9 +76,21 @@ once the data arrives.
 
 ### What the column shows
 
-The cell lists the documented 2FA methods for the entry's domain, comma-separated:
+The column combines two signals: which 2FA methods the site supports (from the 2FA Directory) and
+whether you already have a TOTP or HOTP secret stored in this KeePass entry.
 
-| Token | Shown as |
+The status prefix appears whenever the site is found in the directory:
+
+| Value | Meaning |
+| --- | --- |
+| **[Active] TOTP, Security Key** | Site supports those methods — and a TOTP/HOTP secret is already stored in KeePass. |
+| **[Inactive] TOTP, Security Key** | Site supports those methods, but no secret is stored yet. |
+| **Active** | A TOTP/HOTP secret is stored in KeePass, but the site isn't in the directory. |
+| *(blank)* | The site isn't in the directory and no secret is stored. |
+
+The methods listed after the prefix are comma-separated from the directory:
+
+| Directory token | Shown as |
 | --- | --- |
 | `totp` | **TOTP** |
 | `u2f` | **Security Key** |
@@ -86,7 +99,10 @@ The cell lists the documented 2FA methods for the entry's domain, comma-separate
 | `call` | **Phone Call** |
 | `custom-software` | **Software** (with product names, e.g. *Software (Authy)*) |
 | `custom-hardware` | **Hardware** (with product names, e.g. *Hardware (YubiKey)*) |
-| *(none)* | *(blank — no documented 2FA, or the site isn't in the directory)* |
+
+> The stored-secret detection only checks whether the entry contains fields starting with
+> `HmacOtp-` or `TimeOtp-` (the standard KeePass HOTP/TOTP field names). It reads field
+> **names** only — never field values or secrets.
 
 ### Settings
 

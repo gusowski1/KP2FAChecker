@@ -1,4 +1,5 @@
-namespace KPPasskeyChecker.Shared.Pgp
+﻿// Shared KeeRadar infrastructure — synced from KPPasskeyChecker/src/Shared via sync-shared.ps1; do not edit here
+namespace KeeRadar.Shared.Pgp
 {
     /// <summary>
     /// Outcome of verifying an OpenPGP signed message. On success <see cref="SignedContent"/>
