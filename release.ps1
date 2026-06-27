@@ -193,8 +193,8 @@ function Get-Assets {
     $plgx = Join-Path $buildDir ("{0}.plgx" -f $pluginName)
     $dll  = Join-Path $buildDir ("{0}.dll"  -f $pluginName)
     foreach ($a in @($plgx, $dll)) { if (-not (Test-Path $a)) { throw "Build artifact missing: $a" } }
-    # Return relative paths: gh on Windows mis-globs absolute paths with backslashes in some versions.
-    return @("build\{0}.plgx" -f $pluginName, "build\{0}.dll" -f $pluginName)
+    # Use forward slashes: gh treats backslashes as escape characters and mis-parses the path.
+    return @("build/{0}.plgx" -f $pluginName, "build/{0}.dll" -f $pluginName)
 }
 
 function Confirm-Or-Exit([string]$prompt) {
